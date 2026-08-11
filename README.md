@@ -1,4 +1,4 @@
-# yildiz_perde
+# perde
 
 A new Flutter project.
 
