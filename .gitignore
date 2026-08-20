@@ -47,6 +47,9 @@ app.*.map.json
 # Claude Code local settings
 .claude/
 
+# Environment secrets
+.env
+
 # Loose reference/debug screenshots not used as app assets
 /*.jpeg
 /*.jpg

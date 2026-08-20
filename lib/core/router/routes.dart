@@ -1,6 +1,7 @@
 class Routes {
   Routes._();
 
+  static const login = '/login';
   static const dashboard = '/';
   static const orderForm = '/orders/new';
   static const customers = '/customers';

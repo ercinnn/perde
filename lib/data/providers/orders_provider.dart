@@ -1,89 +1,83 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/supabase/supabase_config.dart';
+import '../../core/utils/mock_clock.dart';
 import '../models/enums.dart';
 import '../models/order_models.dart';
 
 class OrdersNotifier extends StateNotifier<List<Order>> {
-  OrdersNotifier() : super(_seed());
-  int _seq = 12;
+  OrdersNotifier() : super([]) {
+    _load();
+  }
 
-  static List<Order> _seed() {
-    final today = DateTime(2026, 7, 14);
-    Order mk(
-      int i,
-      String name,
-      String phone,
-      String address,
-      DateTime delivery,
-      OrderStatus status,
-      double total,
-      double deposit,
-    ) {
-      final code =
-          'S260714-${(i).toString().padLeft(4, '0')}';
-      return Order(
-        id: 'ord-$i',
-        code: code,
-        customerName: name,
-        phone: phone,
-        address: address,
-        orderDate: today,
-        deliveryDate: delivery,
-        status: status,
-        deposit: deposit,
-        items: [
-          OrderItem(
-            id: 'ord-$i-item-1',
-            productType: ProductType.stor,
-            room: RoomType.salon,
-            width: 1.5,
-            height: 2.2,
-            unitPrice: total,
-            total: total,
-          ),
-        ],
-      );
-    }
-
-    return [
-      mk(1, 'Ali Veli', '05412345566', 'Yeşilyurt Mah. Gül Sok. No:3 Muratpaşa',
-          DateTime(2026, 7, 25), OrderStatus.bekliyor, 1350, 0),
-      mk(2, 'Ayşe Yılmaz', '05323456789', 'Bağdat Cad. No:45 Kadıköy',
-          DateTime(2026, 7, 20), OrderStatus.bekliyor, 3000, 3000),
-      mk(3, 'Elif Çelik', '05467891122', 'Barış Mah. Menekşe Sok. No:14 Osmangazi',
-          DateTime(2026, 7, 15), OrderStatus.bekliyor, 2500, 2500),
-      mk(4, 'Fatma Kaya', '05389876543', 'Cumhuriyet Cad. No:112 Çankaya',
-          DateTime(2026, 7, 18), OrderStatus.bekliyor, 5000, 5000),
-      mk(5, 'Hasan Şahin', '05421239900', 'İnönü Cad. No:67 Kepez',
-          DateTime(2026, 7, 28), OrderStatus.bekliyor, 2700, 1000),
-      mk(6, 'Mehmet Demir', '05451237788', 'Atatürk Mah. 12. Sok. No:8 Bornova',
-          DateTime(2026, 7, 22), OrderStatus.bekliyor, 1800, 0),
-      mk(7, 'Mustafa Aksoy', '05398887766', 'Gazi Mah. Lale Sok. No:9 Yıldırım',
-          DateTime(2026, 7, 30), OrderStatus.bekliyor, 4420, 4000),
-      mk(8, 'Zeynep Aydın', '05336547788', 'Fevzi Çakmak Mah. 5. Cad. No:22 Nilüfer',
-          DateTime(2026, 7, 12), OrderStatus.bekliyor, 8000, 8000),
-    ];
+  Future<void> _load() async {
+    final rows = await supabase
+        .from('orders')
+        .select()
+        .order('order_date', ascending: false);
+    state = [for (final row in rows) Order.fromMap(row)];
   }
 
   String nextCode() {
-    _seq += 1;
-    return 'S260714-${_seq.toString().padLeft(4, '0')}';
+    final prefix = 'S${_yymmdd(mockToday)}-';
+    var maxSeq = 0;
+    for (final o in state) {
+      if (o.code.startsWith(prefix)) {
+        final n = int.tryParse(o.code.substring(prefix.length));
+        if (n != null && n > maxSeq) maxSeq = n;
+      }
+    }
+    return '$prefix${(maxSeq + 1).toString().padLeft(4, '0')}';
   }
 
-  void addOrder(Order order) {
+  static String _yymmdd(DateTime d) {
+    final yy = (d.year % 100).toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final dd = d.day.toString().padLeft(2, '0');
+    return '$yy$mm$dd';
+  }
+
+  Future<void> addOrder(Order order) async {
     state = [...state, order];
+    try {
+      final row =
+          await supabase.from('orders').insert(order.toInsertMap()).select().single();
+      final saved = Order.fromMap(row);
+      state = [for (final o in state) if (o.id == order.id) saved else o];
+    } catch (e) {
+      state = [for (final o in state) if (o.id != order.id) o];
+      debugPrint('addOrder failed: $e');
+      rethrow;
+    }
   }
 
-  void updateOrder(Order order) {
+  Future<void> updateOrder(Order order) async {
+    final previous = state;
     state = [
       for (final o in state) if (o.id == order.id) order else o,
     ];
+    try {
+      await supabase.from('orders').update(order.toInsertMap()).eq('id', order.id);
+    } catch (e) {
+      state = previous;
+      debugPrint('updateOrder failed: $e');
+      rethrow;
+    }
   }
 
-  void setStatus(String orderId, OrderStatus status) {
+  Future<void> setStatus(String orderId, OrderStatus status) async {
+    final previous = state;
     state = [
       for (final o in state)
         if (o.id == orderId) o.copyWith(status: status) else o,
     ];
+    try {
+      await supabase.from('orders').update({'status': status.name}).eq('id', orderId);
+    } catch (e) {
+      state = previous;
+      debugPrint('setStatus failed: $e');
+      rethrow;
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/supabase/supabase_config.dart';
 
 class NavItem {
   const NavItem(this.icon, this.label, this.route, {this.children = const []});
@@ -97,6 +98,31 @@ class _SidebarState extends State<Sidebar> {
               children: [
                 for (final item in sidebarItems) _buildItem(context, item),
               ],
+            ),
+          ),
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.sidebarBorder)),
+            ),
+            child: InkWell(
+              onTap: () => supabase.auth.signOut(),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Row(
+                  children: [
+                    Text('🚪', style: TextStyle(fontSize: 15)),
+                    SizedBox(width: 12),
+                    Text(
+                      'Çıkış Yap',
+                      style: TextStyle(
+                        color: AppColors.sidebarText,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

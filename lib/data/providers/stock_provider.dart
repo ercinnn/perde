@@ -1,108 +1,64 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/supabase/supabase_config.dart';
 import '../models/stock_models.dart';
 
 class StockNotifier extends StateNotifier<List<StockItem>> {
-  StockNotifier() : super(_seed());
-  int _seq = 6;
-
-  static List<StockItem> _seed() {
-    final now = DateTime(2026, 7, 14, 12, 28);
-    return [
-      StockItem(
-        id: 'stk-1',
-        code: 'RAY-002',
-        name: 'Alüminyum Perde Rayı 3m',
-        brand: 'Ray Sistemleri Ltd.',
-        category: 'Aksesuar',
-        quantity: 18,
-        unit: 'adet',
-        minStock: 20,
-        supplierName: 'Ray Sistemleri Ltd.',
-        purchasePrice: 210,
-        lastUpdated: now,
-      ),
-      StockItem(
-        id: 'stk-2',
-        code: 'TUL-001',
-        name: 'Beyaz Tül Kumaş',
-        brand: 'Aydınlı Tekstil',
-        category: 'Kumaş',
-        quantity: 145,
-        unit: 'metre',
-        minStock: 50,
-        supplierName: 'Aydınlı Tekstil',
-        purchasePrice: 42,
-        lastUpdated: now,
-      ),
-      StockItem(
-        id: 'stk-3',
-        code: 'FON-014',
-        name: 'Blackout Fon Kumaş - Krem',
-        brand: 'Fon Center',
-        category: 'Kumaş',
-        quantity: 30,
-        unit: 'metre',
-        minStock: 40,
-        supplierName: 'Fon Center',
-        purchasePrice: 78,
-        lastUpdated: now,
-      ),
-      StockItem(
-        id: 'stk-4',
-        code: 'GUN-003',
-        name: 'Güneşlik Kumaş - Antrasit',
-        brand: 'Fon Center',
-        category: 'Kumaş',
-        quantity: 85,
-        unit: 'metre',
-        minStock: 30,
-        supplierName: 'Fon Center',
-        purchasePrice: 65,
-        lastUpdated: now,
-      ),
-      StockItem(
-        id: 'stk-5',
-        code: 'PIL-009',
-        name: 'Pileli Bant 2.5cm',
-        brand: 'Aksesuar Dünyası',
-        category: 'Aksesuar',
-        quantity: 8,
-        unit: 'top',
-        minStock: 10,
-        supplierName: 'Aksesuar Dünyası',
-        purchasePrice: 35,
-        lastUpdated: now,
-      ),
-      StockItem(
-        id: 'stk-6',
-        code: 'ZEB-007',
-        name: 'Zebra Perde Kumaşı - Gri',
-        brand: 'Modern Perde San.',
-        category: 'Kumaş',
-        quantity: 60,
-        unit: 'metre',
-        minStock: 25,
-        supplierName: 'Modern Perde San.',
-        purchasePrice: 95,
-        lastUpdated: now,
-      ),
-    ];
+  StockNotifier() : super([]) {
+    _load();
   }
 
-  void addItem(StockItem item) => state = [...state, item];
+  Future<void> _load() async {
+    final rows = await supabase.from('stock_items').select().order('name');
+    state = [for (final row in rows) StockItem.fromMap(row)];
+  }
 
-  void adjustQuantity(String id, double delta) {
+  String nextId() => 'stk-tmp-${DateTime.now().microsecondsSinceEpoch}';
+
+  Future<void> addItem(StockItem item) async {
+    state = [...state, item];
+    try {
+      final row =
+          await supabase.from('stock_items').insert(item.toInsertMap()).select().single();
+      final saved = StockItem.fromMap(row);
+      state = [for (final s in state) if (s.id == item.id) saved else s];
+    } catch (e) {
+      state = [for (final s in state) if (s.id != item.id) s];
+      debugPrint('addItem failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> adjustQuantity(String id, double delta) async {
+    final previous = state;
+    StockItem? changed;
     state = [
       for (final s in state)
-        if (s.id == id) s.copyWith(quantity: s.quantity + delta) else s,
+        if (s.id == id) (changed = s.copyWith(quantity: s.quantity + delta)) else s,
     ];
+    if (changed == null) return;
+    try {
+      await supabase.from('stock_items').update({
+        'quantity': changed.quantity,
+        'last_updated': changed.lastUpdated.toIso8601String(),
+      }).eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('adjustQuantity failed: $e');
+      rethrow;
+    }
   }
 
-  void removeItem(String id) => state = state.where((s) => s.id != id).toList();
-
-  String nextId() {
-    _seq += 1;
-    return 'stk-$_seq';
+  Future<void> removeItem(String id) async {
+    final previous = state;
+    state = state.where((s) => s.id != id).toList();
+    try {
+      await supabase.from('stock_items').delete().eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('removeItem failed: $e');
+      rethrow;
+    }
   }
 }
 
@@ -110,58 +66,50 @@ final stockProvider =
     StateNotifierProvider<StockNotifier, List<StockItem>>((ref) => StockNotifier());
 
 class SuppliersNotifier extends StateNotifier<List<Supplier>> {
-  SuppliersNotifier() : super(_seed());
-  int _seq = 3;
-
-  static List<Supplier> _seed() {
-    return [
-      Supplier(
-        id: 'sup-1',
-        name: 'Aydınlı Tekstil',
-        contactPerson: 'Kemal Aydın',
-        phone: '02123456789',
-        email: 'info@aydinlitekstil.com',
-        category: 'Kumaş',
-        address: 'Merter, İstanbul',
-        products: [
-          SupplierProduct(name: 'Beyaz Tül Kumaş (metre)', price: 42),
-          SupplierProduct(name: 'Krem Tül Kumaş (metre)', price: 45),
-        ],
-      ),
-      Supplier(
-        id: 'sup-2',
-        name: 'Fon Center',
-        contactPerson: 'Serkan Yıldız',
-        phone: '02129876543',
-        category: 'Kumaş',
-        products: [
-          SupplierProduct(name: 'Blackout Fon Kumaş (metre)', price: 78),
-          SupplierProduct(name: 'Güneşlik Kumaş (metre)', price: 65),
-        ],
-      ),
-      Supplier(
-        id: 'sup-3',
-        name: 'Ray Sistemleri Ltd.',
-        contactPerson: 'Onur Kaplan',
-        phone: '02165432109',
-        category: 'Aksesuar',
-        products: [
-          SupplierProduct(name: 'Alüminyum Ray 3m', price: 210, unit: 'adet'),
-        ],
-      ),
-    ];
+  SuppliersNotifier() : super([]) {
+    _load();
   }
 
-  void addSupplier(Supplier supplier) => state = [...state, supplier];
+  Future<void> _load() async {
+    final rows = await supabase.from('suppliers').select().order('name');
+    state = [for (final row in rows) Supplier.fromMap(row)];
+  }
 
-  void removeSupplier(String id) =>
-      state = state.where((s) => s.id != id).toList();
+  String nextId() => 'sup-tmp-${DateTime.now().microsecondsSinceEpoch}';
 
-  void addProductToSupplier(String supplierId, SupplierProduct product) {
+  Future<void> addSupplier(Supplier supplier) async {
+    state = [...state, supplier];
+    try {
+      final row =
+          await supabase.from('suppliers').insert(supplier.toInsertMap()).select().single();
+      final saved = Supplier.fromMap(row);
+      state = [for (final s in state) if (s.id == supplier.id) saved else s];
+    } catch (e) {
+      state = [for (final s in state) if (s.id != supplier.id) s];
+      debugPrint('addSupplier failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> removeSupplier(String id) async {
+    final previous = state;
+    state = state.where((s) => s.id != id).toList();
+    try {
+      await supabase.from('suppliers').delete().eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('removeSupplier failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> addProductToSupplier(String supplierId, SupplierProduct product) async {
+    final previous = state;
+    Supplier? updated;
     state = [
       for (final s in state)
         if (s.id == supplierId)
-          Supplier(
+          (updated = Supplier(
             id: s.id,
             name: s.name,
             contactPerson: s.contactPerson,
@@ -171,15 +119,21 @@ class SuppliersNotifier extends StateNotifier<List<Supplier>> {
             address: s.address,
             notes: s.notes,
             products: [...s.products, product],
-          )
+          ))
         else
           s,
     ];
-  }
-
-  String nextId() {
-    _seq += 1;
-    return 'sup-$_seq';
+    if (updated == null) return;
+    try {
+      await supabase
+          .from('suppliers')
+          .update({'products': updated.products.map((p) => p.toMap()).toList()})
+          .eq('id', supplierId);
+    } catch (e) {
+      state = previous;
+      debugPrint('addProductToSupplier failed: $e');
+      rethrow;
+    }
   }
 }
 
@@ -188,17 +142,41 @@ final suppliersProvider =
         (ref) => SuppliersNotifier());
 
 class StockRequestsNotifier extends StateNotifier<List<StockRequest>> {
-  StockRequestsNotifier() : super([]);
-  int _seq = 0;
+  StockRequestsNotifier() : super([]) {
+    _load();
+  }
 
-  void addRequest(StockRequest r) => state = [...state, r];
+  Future<void> _load() async {
+    final rows = await supabase.from('stock_requests').select().order('delivery_date');
+    state = [for (final row in rows) StockRequest.fromMap(row)];
+  }
 
-  void removeRequest(String id) =>
-      state = state.where((r) => r.id != id).toList();
+  String nextId() => 'req-tmp-${DateTime.now().microsecondsSinceEpoch}';
 
-  String nextId() {
-    _seq += 1;
-    return 'req-$_seq';
+  Future<void> addRequest(StockRequest r) async {
+    state = [...state, r];
+    try {
+      final row =
+          await supabase.from('stock_requests').insert(r.toInsertMap()).select().single();
+      final saved = StockRequest.fromMap(row);
+      state = [for (final x in state) if (x.id == r.id) saved else x];
+    } catch (e) {
+      state = [for (final x in state) if (x.id != r.id) x];
+      debugPrint('addRequest failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> removeRequest(String id) async {
+    final previous = state;
+    state = state.where((r) => r.id != id).toList();
+    try {
+      await supabase.from('stock_requests').delete().eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('removeRequest failed: $e');
+      rethrow;
+    }
   }
 }
 

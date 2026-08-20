@@ -156,7 +156,7 @@ class _OrderTabState extends ConsumerState<_OrderTab> {
   double get _total => (_subtotal - _discount).clamp(0, double.infinity);
   double get _remaining => (_total - _deposit).clamp(0, double.infinity);
 
-  void _save() {
+  Future<void> _save() async {
     if (_nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Müşteri adı zorunludur')));
@@ -177,7 +177,15 @@ class _OrderTabState extends ConsumerState<_OrderTab> {
       deposit: _deposit,
       discount: _discount,
     );
-    notifier.addOrder(order);
+    try {
+      await notifier.addOrder(order);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Sipariş kaydedilemedi: $e')));
+      return;
+    }
+    if (!mounted) return;
     showOrderSummaryDialog(context, order);
     setState(() {
       _nameCtrl.clear();

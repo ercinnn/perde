@@ -28,6 +28,36 @@ class OrderItem {
   final int quantity;
   final String note;
   final double total;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'product_type': productType.name,
+        'room': room.name,
+        'product_code': productCode,
+        'width': width,
+        'height': height,
+        'pile_type': pileType,
+        'pile_percent': pilePercent,
+        'unit_price': unitPrice,
+        'quantity': quantity,
+        'note': note,
+        'total': total,
+      };
+
+  factory OrderItem.fromMap(Map<String, dynamic> map) => OrderItem(
+        id: map['id'] as String,
+        productType: ProductType.values.byName(map['product_type'] as String),
+        room: RoomType.values.byName(map['room'] as String),
+        productCode: map['product_code'] as String? ?? '',
+        width: (map['width'] as num).toDouble(),
+        height: (map['height'] as num).toDouble(),
+        pileType: map['pile_type'] as String?,
+        pilePercent: (map['pile_percent'] as num?)?.toDouble() ?? 0,
+        unitPrice: (map['unit_price'] as num).toDouble(),
+        quantity: (map['quantity'] as num?)?.toInt() ?? 1,
+        note: map['note'] as String? ?? '',
+        total: (map['total'] as num).toDouble(),
+      );
 }
 
 class Order {
@@ -87,6 +117,39 @@ class Order {
       status: status ?? this.status,
     );
   }
+
+  Map<String, dynamic> toInsertMap() => {
+        'code': code,
+        'customer_name': customerName,
+        'phone': phone,
+        'address': address,
+        'order_date': orderDate.toIso8601String(),
+        'delivery_date': deliveryDate.toIso8601String(),
+        'delivery_type': deliveryType.name,
+        'plan_time': planTime,
+        'items': items.map((i) => i.toMap()).toList(),
+        'deposit': deposit,
+        'discount': discount,
+        'status': status.name,
+      };
+
+  factory Order.fromMap(Map<String, dynamic> map) => Order(
+        id: map['id'] as String,
+        code: map['code'] as String,
+        customerName: map['customer_name'] as String,
+        phone: map['phone'] as String,
+        address: map['address'] as String,
+        orderDate: DateTime.parse(map['order_date'] as String),
+        deliveryDate: DateTime.parse(map['delivery_date'] as String),
+        deliveryType: DeliveryType.values.byName(map['delivery_type'] as String),
+        planTime: map['plan_time'] as String,
+        items: (map['items'] as List<dynamic>? ?? [])
+            .map((e) => OrderItem.fromMap(e as Map<String, dynamic>))
+            .toList(),
+        deposit: (map['deposit'] as num).toDouble(),
+        discount: (map['discount'] as num).toDouble(),
+        status: OrderStatus.values.byName(map['status'] as String),
+      );
 }
 
 class CustomerSummary {

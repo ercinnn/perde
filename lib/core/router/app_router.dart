@@ -1,6 +1,11 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'routes.dart';
+import '../supabase/supabase_config.dart';
 import '../../shared/widgets/app_shell.dart';
+import '../../features/auth/login_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/orders/order_form_screen.dart';
 import '../../features/customers/customer_list_screen.dart';
@@ -16,9 +21,36 @@ import '../../features/business_tools/extra_price_list_screen.dart';
 import '../../features/business_tools/delivery_calc_screen.dart';
 import '../../features/business_tools/calc_note_screen.dart';
 
+class _AuthRefreshListenable extends ChangeNotifier {
+  _AuthRefreshListenable() {
+    _sub = supabase.auth.onAuthStateChange.listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<AuthState> _sub;
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
+
 final appRouter = GoRouter(
   initialLocation: Routes.dashboard,
+  refreshListenable: _AuthRefreshListenable(),
+  redirect: (context, state) {
+    final loggedIn = supabase.auth.currentSession != null;
+    final loggingIn = state.matchedLocation == Routes.login;
+
+    if (!loggedIn && !loggingIn) return Routes.login;
+    if (loggedIn && loggingIn) return Routes.dashboard;
+    return null;
+  },
   routes: [
+    GoRoute(
+      path: Routes.login,
+      builder: (context, state) => const LoginScreen(),
+    ),
     ShellRoute(
       builder: (context, state, child) =>
           AppShell(currentPath: state.uri.path, child: child),

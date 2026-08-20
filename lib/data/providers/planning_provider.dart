@@ -1,39 +1,35 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/enums.dart';
+import '../../core/supabase/supabase_config.dart';
 import '../models/planning_models.dart';
 
 class WeeklyPlanNotifier extends StateNotifier<List<WeeklyPlanEntry>> {
-  WeeklyPlanNotifier() : super(_seed());
-  int _seq = 3;
+  WeeklyPlanNotifier() : super([]) {
+    _load();
+  }
 
-  static List<WeeklyPlanEntry> _seed() => [
-        WeeklyPlanEntry(
-          id: 'plan-1',
-          date: DateTime(2026, 7, 15),
-          time: '10.30',
-          customerName: 'Fatma Kaya',
-          description: 'Salon fon+tül montajı',
-        ),
-        WeeklyPlanEntry(
-          id: 'plan-2',
-          date: DateTime(2026, 7, 16),
-          time: '14.00',
-          customerName: 'Ayşe Yılmaz',
-          description: 'Salon montajı',
-        ),
-        WeeklyPlanEntry(
-          id: 'plan-3',
-          date: DateTime(2026, 7, 18),
-          time: '09.30',
-          customerName: 'Mustafa Aksoy',
-          description: 'Salon tül montajı - Yıldırım bölgesi',
-        ),
-      ];
+  Future<void> _load() async {
+    final rows = await supabase.from('weekly_plan_entries').select().order('date');
+    state = [for (final row in rows) WeeklyPlanEntry.fromMap(row)];
+  }
 
-  void addEntry(WeeklyPlanEntry e) => state = [...state, e];
-  String nextId() {
-    _seq += 1;
-    return 'plan-$_seq';
+  String nextId() => 'plan-tmp-${DateTime.now().microsecondsSinceEpoch}';
+
+  Future<void> addEntry(WeeklyPlanEntry e) async {
+    state = [...state, e];
+    try {
+      final row = await supabase
+          .from('weekly_plan_entries')
+          .insert(e.toInsertMap())
+          .select()
+          .single();
+      final saved = WeeklyPlanEntry.fromMap(row);
+      state = [for (final x in state) if (x.id == e.id) saved else x];
+    } catch (err) {
+      state = [for (final x in state) if (x.id != e.id) x];
+      debugPrint('addEntry failed: $err');
+      rethrow;
+    }
   }
 }
 
@@ -42,25 +38,40 @@ final weeklyPlanProvider =
         (ref) => WeeklyPlanNotifier());
 
 class PileFeesNotifier extends StateNotifier<List<PileFee>> {
-  PileFeesNotifier() : super(_seed());
-  int _seq = 8;
+  PileFeesNotifier() : super([]) {
+    _load();
+  }
 
-  static List<PileFee> _seed() => [
-        PileFee(id: 'pf-1', name: 'Ağ Pile', price: 45),
-        PileFee(id: 'pf-2', name: 'Yan Pile', price: 55),
-        PileFee(id: 'pf-3', name: 'S Pile', price: 50),
-        PileFee(id: 'pf-4', name: 'V Pile', price: 60),
-        PileFee(id: 'pf-5', name: 'Düz Pile', price: 40),
-        PileFee(id: 'pf-6', name: 'Kelebek Pile', price: 70),
-        PileFee(id: 'pf-7', name: 'Göbek Pile', price: 65),
-        PileFee(id: 'pf-8', name: 'Kruvaze Fon', price: 150),
-      ];
+  Future<void> _load() async {
+    final rows = await supabase.from('pile_fees').select().order('name');
+    state = [for (final row in rows) PileFee.fromMap(row)];
+  }
 
-  void addFee(PileFee f) => state = [...state, f];
-  void removeFee(String id) => state = state.where((f) => f.id != id).toList();
-  String nextId() {
-    _seq += 1;
-    return 'pf-$_seq';
+  String nextId() => 'pf-tmp-${DateTime.now().microsecondsSinceEpoch}';
+
+  Future<void> addFee(PileFee f) async {
+    state = [...state, f];
+    try {
+      final row = await supabase.from('pile_fees').insert(f.toInsertMap()).select().single();
+      final saved = PileFee.fromMap(row);
+      state = [for (final x in state) if (x.id == f.id) saved else x];
+    } catch (e) {
+      state = [for (final x in state) if (x.id != f.id) x];
+      debugPrint('addFee failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> removeFee(String id) async {
+    final previous = state;
+    state = state.where((f) => f.id != id).toList();
+    try {
+      await supabase.from('pile_fees').delete().eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('removeFee failed: $e');
+      rethrow;
+    }
   }
 }
 
@@ -69,42 +80,44 @@ final pileFeesProvider =
         (ref) => PileFeesNotifier());
 
 class FeaturePricesNotifier extends StateNotifier<List<ProductFeaturePrice>> {
-  FeaturePricesNotifier() : super(_seed());
-  int _seq = 4;
+  FeaturePricesNotifier() : super([]) {
+    _load();
+  }
 
-  static List<ProductFeaturePrice> _seed() => [
-        ProductFeaturePrice(
-          id: 'fp-1',
-          productType: ProductType.pliseli,
-          optionName: 'Yapıştırmalı',
-          price: 150,
-        ),
-        ProductFeaturePrice(
-          id: 'fp-2',
-          productType: ProductType.ahsapJaluzi,
-          optionName: 'Kurdelasız + Redüktörsüz',
-          price: -300,
-        ),
-        ProductFeaturePrice(
-          id: 'fp-3',
-          productType: ProductType.stor,
-          optionName: 'Motorlu Sistem',
-          price: 1200,
-        ),
-        ProductFeaturePrice(
-          id: 'fp-4',
-          productType: ProductType.zebra,
-          optionName: 'Motorlu Sistem',
-          price: 1200,
-        ),
-      ];
+  Future<void> _load() async {
+    final rows = await supabase.from('product_feature_prices').select().order('option_name');
+    state = [for (final row in rows) ProductFeaturePrice.fromMap(row)];
+  }
 
-  void addFeature(ProductFeaturePrice f) => state = [...state, f];
-  void removeFeature(String id) =>
-      state = state.where((f) => f.id != id).toList();
-  String nextId() {
-    _seq += 1;
-    return 'fp-$_seq';
+  String nextId() => 'fp-tmp-${DateTime.now().microsecondsSinceEpoch}';
+
+  Future<void> addFeature(ProductFeaturePrice f) async {
+    state = [...state, f];
+    try {
+      final row = await supabase
+          .from('product_feature_prices')
+          .insert(f.toInsertMap())
+          .select()
+          .single();
+      final saved = ProductFeaturePrice.fromMap(row);
+      state = [for (final x in state) if (x.id == f.id) saved else x];
+    } catch (e) {
+      state = [for (final x in state) if (x.id != f.id) x];
+      debugPrint('addFeature failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> removeFeature(String id) async {
+    final previous = state;
+    state = state.where((f) => f.id != id).toList();
+    try {
+      await supabase.from('product_feature_prices').delete().eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('removeFeature failed: $e');
+      rethrow;
+    }
   }
 }
 
@@ -113,31 +126,63 @@ final featurePricesProvider =
         (ref) => FeaturePricesNotifier());
 
 class TasksNotifier extends StateNotifier<List<TaskReminder>> {
-  TasksNotifier() : super(_seed());
-  int _seq = 1;
-
-  static List<TaskReminder> _seed() => [
-        TaskReminder(
-          id: 'task-1',
-          title: 'Blackout Fon Kumaş - Krem — 30 metre',
-        ),
-      ];
-
-  void addTask(String title, DateTime? dueDate) {
-    _seq += 1;
-    state = [
-      ...state,
-      TaskReminder(id: 'task-$_seq', title: title, dueDate: dueDate),
-    ];
+  TasksNotifier() : super([]) {
+    _load();
   }
 
-  void toggleDone(String id) {
+  Future<void> _load() async {
+    final rows = await supabase.from('task_reminders').select().order('title');
+    state = [for (final row in rows) TaskReminder.fromMap(row)];
+  }
+
+  Future<void> addTask(String title, DateTime? dueDate) async {
+    final optimistic = TaskReminder(
+      id: 'task-tmp-${DateTime.now().microsecondsSinceEpoch}',
+      title: title,
+      dueDate: dueDate,
+    );
+    state = [...state, optimistic];
+    try {
+      final row = await supabase
+          .from('task_reminders')
+          .insert(optimistic.toInsertMap())
+          .select()
+          .single();
+      final saved = TaskReminder.fromMap(row);
+      state = [for (final x in state) if (x.id == optimistic.id) saved else x];
+    } catch (e) {
+      state = [for (final x in state) if (x.id != optimistic.id) x];
+      debugPrint('addTask failed: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> toggleDone(String id) async {
+    final previous = state;
     state = [
       for (final t in state) if (t.id == id) t.copyWith(done: !t.done) else t,
     ];
+    final updated = state.firstWhere((t) => t.id == id);
+    try {
+      await supabase.from('task_reminders').update({'done': updated.done}).eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('toggleDone failed: $e');
+      rethrow;
+    }
   }
 
-  void removeTask(String id) => state = state.where((t) => t.id != id).toList();
+  Future<void> removeTask(String id) async {
+    final previous = state;
+    state = state.where((t) => t.id != id).toList();
+    try {
+      await supabase.from('task_reminders').delete().eq('id', id);
+    } catch (e) {
+      state = previous;
+      debugPrint('removeTask failed: $e');
+      rethrow;
+    }
+  }
 }
 
 final tasksProvider =
